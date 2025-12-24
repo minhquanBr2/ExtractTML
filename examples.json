@@ -1,0 +1,43 @@
+﻿[
+    {
+        "description": "Ví dụ về TML tròn.",
+        "example_image_path": "example_images/redcircle.png",
+        "expected_output_json": {
+            "object_type": "Vòng tròn",
+            "extracted_content": "",
+            "center_x": 350,
+            "center_y": 600
+        }
+    },
+
+    {
+        "description": "Ví dụ về TML hình vuông/chử nhật nền vàng.",
+        "example_image_path": "example_images/hinhchunhatnenvang.jpg",
+        "expected_output_json": {
+            "object_type": "Hình vuông/chữ nhật nền vàng",
+            "extracted_content": "17",
+            "center_x": 800,
+            "center_y": 700
+        }
+    },
+    {
+        "description": "Ví dụ về TML hình vuông/chử nhật.",
+        "example_image_path": "example_images/redrectangle.png",
+        "expected_output_json": {
+            "object_type": "Hình vuông/chữ nhật",
+            "extracted_content": "",
+            "center_x": 800,
+            "center_y": 700
+        }
+    },
+    {
+        "description": "Ví dụ về TML hình đa giác.",
+        "example_image_path": "example_images/bluefaceted.png",
+        "expected_output_json": {
+            "object_type": "Hình đa giác",
+            "extracted_content": "",
+            "center_x": 800,
+            "center_y": 700
+        }
+    }
+]
