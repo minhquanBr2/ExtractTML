@@ -1,8 +1,0 @@
-Từ bản vẽ kỹ thuật này, hãy tìm và trích xuất tất cả các mã TML (Thickness Measurement Location) được đánh dấu bằng vòng tròn hoặc đám mây sửa đổi MÀU ĐỎ hoặc CAM. 
-
-Yêu cầu:
-1. Chỉ trích xuất mã số TML (ví dụ: "15A", "9", "18", "TML1","TML 1).
-2. Đối với mỗi TML, hãy ước tính VỊ TRÍ TÂM tương đối của nó trên bản vẽ (ví dụ: [X, Y] trên thang từ 0 đến 1000).
-3. Bỏ qua tất cả các nội dung khác (bảng, ghi chú).
-4. Trả lời dưới định dạng JSON với một array có key là "extracted_tml_tags".
-Mỗi đối tượng trong array phải có các trường: "tag_id", "center_x", và "center_y".
