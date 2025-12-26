@@ -105,8 +105,8 @@ def split_stroke_fill_from_raw(
     Returns: (stroke_mask, fill_mask, debug_dict)
     """
     # --- stroke path (preserve thin borders)
-    stroke0 = remove_small_blobs(raw0, min_area=min_area)
-    stroke1 = clean_stroke_mask(stroke0, k_close=k_stroke)
+    # stroke0 = remove_small_blobs(raw0, min_area=min_area)
+    stroke1 = clean_stroke_mask(raw0, k_close=k_stroke)
     # stroke2 = remove_leader_lines(stroke1)
 
     # --- fill path (more aggressive cleaning)
@@ -119,7 +119,7 @@ def split_stroke_fill_from_raw(
 
     debug = {
         "raw0": raw0,
-        "stroke0_blobs": stroke0,
+        # "stroke0_blobs": stroke0,
         "stroke1_close": stroke1,
         # "stroke2_leader": stroke2,
         "fill0_closeopen": fill0,

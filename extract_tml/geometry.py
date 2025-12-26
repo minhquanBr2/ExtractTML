@@ -12,6 +12,8 @@ def _filter_by_area(cnt: np.ndarray, min_area: int, max_area: int) -> Optional[f
     area = float(cv2.contourArea(cnt))
     if area < float(min_area) or area > float(max_area):
         return None
+    print(f"Contour with {len(cnt)} points.")
+    print(f"Area: {area}")
     return area
 
 

@@ -22,7 +22,7 @@ def main(argv=None):
     json_path = os.path.join("outputs", f"{base}.json")
     vis_path = os.path.join("outputs", f"{base}.jpg")
 
-    out_json, detections = extract_tags(img, debug=True, return_detections=True)
+    out_json, detections = extract_tags(img, debug=False, return_detections=True)
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(out_json, f, ensure_ascii=False, indent=2)

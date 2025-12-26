@@ -65,22 +65,31 @@ def extract_tags(
 
         # IMPORTANT: raw should be raw0 (or a lightly blob-filtered version),
         # but stroke/fill are distinct outputs now.
-        raw = remove_small_blobs(raw0, min_area=SHAPE_THRESH["min_area"])
+        # raw = remove_small_blobs(raw0, min_area=SHAPE_THRESH["min_area"])
 
-        mask_bank[color] = {
-            "raw": raw,
-            "stroke": stroke,
-            "fill": fill,
-        }
+        if color != "black":
+            mask_bank[color] = {
+                "raw": raw0,
+                "stroke": stroke,
+                "fill": fill,
+            }
+        else:
+            mask_bank[color] = {
+                "raw": raw0,
+                "stroke": raw0,
+                "fill": fill,
+            }
 
-        if debug and color == "black" and shape == "circle" and use == "stroke":
+        if debug and color == "black":
             print(f"Debugging color {color}...")
             visualize_color_masks({
                 "raw0_threshold": dbg["raw0"],
+                # "stroke_blobs":   dbg["stroke0_blobs"],
                 "stroke_close":   dbg["stroke1_close"],
                 # "stroke_leader":  dbg["stroke2_leader"],
                 "fill_closeopen": dbg["fill0_closeopen"],
                 "fill_final":     dbg["fill2_close"],
+                "final_raw":      raw0
             }, cols=2, title="BLACK masks: raw vs stroke vs fill")
 
     # ---- detect by rules (rule stamps meta)
@@ -173,8 +182,8 @@ def extract_tags(
         w0_norm = int(np.clip(round(w0_orig / W0 * 1000.0), 0, 1000))
         h0_norm = int(np.clip(round(h0_orig / H0 * 1000.0), 0, 1000))
 
-        # print(f"Tag {i}: '{tag}' with bbox_norm=({x0_norm},{y0_norm},{w0_norm},{h0_norm}) and area = {w0_norm * h0_norm}")
-        if w0_norm * h0_norm > 3000 or w0_norm > 40 or h0_norm > 40:
+        print(f"Tag {i}: '{tag}' with bbox_norm=({x0_norm},{y0_norm},{w0_norm},{h0_norm}) and area = {w0_norm * h0_norm}")
+        if w0_norm * h0_norm > 3000 or w0_norm > 100 or h0_norm > 100:
             continue
 
         bbox_orig = [x0_orig, y0_orig, w0_orig, h0_orig]

@@ -32,18 +32,16 @@ def detect_circles_from_mask(
     mask: np.ndarray,
     *,
     meta: Optional[Dict[str, Any]] = None,
-    min_area: int = 200,
+    min_area: int = 25,
     max_area: int = 2000,
-    circularity_min: float = 0.72,
-    circularity_max: float = 1.25,
+    circularity_min: float = 0.4,
+    circularity_max: float = 2,
 ) -> List[Candidate]:
     meta = meta or {}
     out: List[Candidate] = []
 
     for cnt in find_contours(mask):
-        print(f"Contour with {len(cnt)} points.")
         area = _filter_by_area(cnt, min_area, max_area)
-        print(f"Area: {area}")
         if area is None:
             continue
 
@@ -91,12 +89,10 @@ def detect_rects_from_mask(
 
     for cnt in find_contours(mask):
         area = _filter_by_area(cnt, min_area, max_area)
-        print(area)
         if area is None:
             continue
 
         poly = approx_poly(cnt, poly_eps_ratio)
-        print(len(poly))
         if len(poly) != 4:
             continue
 
