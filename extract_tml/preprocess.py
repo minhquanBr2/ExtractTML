@@ -35,6 +35,24 @@ def morph_close_open(mask: np.ndarray, k: int = 3) -> np.ndarray:
     return mask
 
 
+def clean_stroke_mask(mask: np.ndarray, k_close: int = 3) -> np.ndarray:
+    """
+    For thin border strokes: avoid OPEN (erosion-first). Use CLOSE only to bridge gaps.
+    """
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_close, k_close))
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k, iterations=1)
+
+
+def clean_fill_mask(mask: np.ndarray, k: int = 3) -> np.ndarray:
+    """
+    For filled regions: close+open is OK to fill small holes and remove speckles.
+    """
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k, iterations=1)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  k, iterations=1)
+    return mask
+
+
 def remove_small_blobs(mask: np.ndarray, min_area: int) -> np.ndarray:
     num, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
     out = np.zeros_like(mask)
@@ -45,15 +63,67 @@ def remove_small_blobs(mask: np.ndarray, min_area: int) -> np.ndarray:
     return out
 
 
-def split_stroke_fill(mask: np.ndarray, ksize: int = 3):
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE, (ksize, ksize)
-    )
+def remove_leader_lines(mask: np.ndarray, lengths=(15, 25, 35)) -> np.ndarray:
+    """
+    Removes long thin line-like components (leader lines) from a stroke mask.
+    """
+    mask = mask.copy()
+    extracted_lines = np.zeros_like(mask)
 
-    # Stroke = morphological gradient
-    stroke = cv2.morphologyEx(mask, cv2.MORPH_GRADIENT, kernel)
+    for L in lengths:
+        # horizontal line kernel
+        kx = cv2.getStructuringElement(cv2.MORPH_RECT, (L, 1))
+        # vertical line kernel
+        ky = cv2.getStructuringElement(cv2.MORPH_RECT, (1, L))
 
-    # Fill = close + hole fill (optional)
-    fill = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+        # opening extracts line segments matching kernel orientation
+        lines_h = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kx)
+        lines_v = cv2.morphologyEx(mask, cv2.MORPH_OPEN, ky)
 
-    return stroke, fill
+        extracted_lines = cv2.bitwise_or(extracted_lines, lines_h)
+        extracted_lines = cv2.bitwise_or(extracted_lines, lines_v)
+
+    # remove extracted lines from original
+    core = cv2.bitwise_and(mask, cv2.bitwise_not(extracted_lines))
+
+    # small close to heal minor nicks on the shape border after subtraction
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    core = cv2.morphologyEx(core, cv2.MORPH_CLOSE, k, iterations=1)
+
+    return core
+
+
+def split_stroke_fill_from_raw(
+    raw0: np.ndarray,
+    *,
+    k_stroke: int = 3,
+    k_fill: int = 3,
+    min_area: int = 200,
+) -> tuple[np.ndarray, np.ndarray, dict]:
+    """
+    Build stroke/fill from the SAME color threshold (raw0) but with different cleaning paths.
+    Returns: (stroke_mask, fill_mask, debug_dict)
+    """
+    # --- stroke path (preserve thin borders)
+    stroke0 = remove_small_blobs(raw0, min_area=min_area)
+    stroke1 = clean_stroke_mask(stroke0, k_close=k_stroke)
+    # stroke2 = remove_leader_lines(stroke1)
+
+    # --- fill path (more aggressive cleaning)
+    fill0 = clean_fill_mask(raw0, k=k_fill)
+    fill1 = remove_small_blobs(fill0, min_area=min_area)
+
+    # Convert fill into "solid" by closing again (optional)
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_fill, k_fill))
+    fill2 = cv2.morphologyEx(fill1, cv2.MORPH_CLOSE, k, iterations=1)
+
+    debug = {
+        "raw0": raw0,
+        "stroke0_blobs": stroke0,
+        "stroke1_close": stroke1,
+        # "stroke2_leader": stroke2,
+        "fill0_closeopen": fill0,
+        "fill1_blobs": fill1,
+        "fill2_close": fill2,
+    }
+    return stroke1, fill2, debug

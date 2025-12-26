@@ -34,6 +34,8 @@ def visualize_color_masks(
 
 def draw_detections_on_image(image_bgr: np.ndarray, detections: List[Dict[str, Any]]) -> np.ndarray:
     vis = image_bgr.copy()
+    scale = 0.4
+    thickness = 1
 
     for det in detections:
         tag = det["tag_id"]
@@ -43,10 +45,10 @@ def draw_detections_on_image(image_bgr: np.ndarray, detections: List[Dict[str, A
         cv2.rectangle(vis, (x, y), (x2, y2), (0, 255, 0), 2)
         label = tag
 
-        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
         y_text = max(0, y - 8)
         cv2.rectangle(vis, (x, y_text - th - 6), (x + tw + 6, y_text), (0, 255, 0), -1)
-        cv2.putText(vis, label, (x + 3, y_text - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2, cv2.LINE_AA)
+        cv2.putText(vis, label, (x + 3, y_text - 4), cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), thickness, cv2.LINE_AA)
 
     return vis
 

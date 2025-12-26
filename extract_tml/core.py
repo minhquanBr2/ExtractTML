@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from .ocr import build_ocr
 from .config import HSV_RANGES, RULE_SPEC, SHAPE_THRESH
-from .preprocess import denoise_light, maybe_resize, threshold_hsv, morph_close_open, remove_small_blobs, split_stroke_fill
+from .preprocess import denoise_light, maybe_resize, threshold_hsv, morph_close_open, remove_small_blobs, split_stroke_fill_from_raw
 from .detect import detect_by_shape
 from .nms import nms, nms_keep_smaller
 from .postprocess import crop_with_padding, ocr_preprocess, extract_tag_from_text, normalize_tag
@@ -55,19 +55,33 @@ def extract_tags(
     mask_bank = {}
     for color, ranges in HSV_RANGES.items():
         raw0 = threshold_hsv(hsv, ranges)
-        raw1 = morph_close_open(raw0, k=3)
-        raw = remove_small_blobs(raw1, min_area=SHAPE_THRESH["min_area"])
 
-        stroke, fill = split_stroke_fill(raw, ksize=3)
-        mask_bank[color] = {"raw": raw, "stroke": raw0, "fill": fill}
-        if color == "red":
+        stroke, fill, dbg = split_stroke_fill_from_raw(
+            raw0,
+            k_stroke=3,
+            k_fill=3,
+            min_area=SHAPE_THRESH["min_area"],
+        )
+
+        # IMPORTANT: raw should be raw0 (or a lightly blob-filtered version),
+        # but stroke/fill are distinct outputs now.
+        raw = remove_small_blobs(raw0, min_area=SHAPE_THRESH["min_area"])
+
+        mask_bank[color] = {
+            "raw": raw,
+            "stroke": stroke,
+            "fill": fill,
+        }
+
+        if debug and color == "black" and shape == "circle" and use == "stroke":
+            print(f"Debugging color {color}...")
             visualize_color_masks({
-                "raw0": raw0,
-                "raw1": raw1,
-                "raw": raw,
-                "stroke": stroke,
-                "fill": fill
-            })
+                "raw0_threshold": dbg["raw0"],
+                "stroke_close":   dbg["stroke1_close"],
+                # "stroke_leader":  dbg["stroke2_leader"],
+                "fill_closeopen": dbg["fill0_closeopen"],
+                "fill_final":     dbg["fill2_close"],
+            }, cols=2, title="BLACK masks: raw vs stroke vs fill")
 
     # ---- detect by rules (rule stamps meta)
     candidates: List[Candidate] = []
@@ -80,7 +94,16 @@ def extract_tags(
         mask = mask_bank[color][use]
         meta = {"color": color, "use": use, "rule_id": rule_id}
 
-        candidates.extend(detect_by_shape(mask, shape, meta))
+        rule_candidates = detect_by_shape(mask, shape, meta)
+        candidates.extend(rule_candidates)
+        
+        if debug and color == "black" and shape == "circle" and use == "stroke":
+            draw_bboxes_on_image(
+                img_bgr=img,
+                candidates=rule_candidates,
+                title=f"Candidates for rule {rule_id} ({color}, {shape}, {use})"
+            )
+
     print(f"\nFounding {len(candidates)} candidates in total.")
 
     # ---- keep only candidates that already have rule_id
@@ -99,10 +122,10 @@ def extract_tags(
     grouped = defaultdict(list)
     for c in valid:
         grouped[c.rule_id].append(c)
-    print(f"\nPrinting groups...")
+    
     for rule_id in sorted(grouped.keys()):
         print(f"rule_id = {rule_id}:")
-        print(f"Number of candidates for this rule: {len(grouped[rule_id])}")
+        print(f"Number of candidates for rule {rule_id}: {len(grouped[rule_id])}")
         print()
 
     valid_after_nms = []
@@ -114,7 +137,7 @@ def extract_tags(
         draw_bboxes_on_image(
             img_bgr=img,
             candidates=valid_after_nms,
-            title="After NMS (per rule)"
+            title="After NMS"
         )
 
     # ---- OCR + output
@@ -123,23 +146,10 @@ def extract_tags(
     for i, c in enumerate(valid_after_nms):
         roi = crop_with_padding(img, c.bbox, pad_ratio=0.25)
 
-        if debug:
-            import matplotlib.pyplot as plt
-            roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
-            x, y, w, h = c.bbox
-            plt.figure(figsize=(4, 4))
-            plt.imshow(roi_rgb)
-            plt.title(
-                f"#{i} rule={c.rule_id} {c.color}/{c.use} {c.shape}\n"
-                f"bbox=({x},{y},{w},{h})"
-            )
-            plt.axis("off")
-            plt.show()
-
         raw_text, conf = ocr_fn(roi)
         tag = extract_tag_from_text(raw_text)
         if not tag:
-            continue
+            tag = "???"
         tag = normalize_tag(tag)
 
         cx_r, cy_r = c.center
@@ -163,15 +173,33 @@ def extract_tags(
         w0_norm = int(np.clip(round(w0_orig / W0 * 1000.0), 0, 1000))
         h0_norm = int(np.clip(round(h0_orig / H0 * 1000.0), 0, 1000))
 
-        # if w0_norm * h0_norm > 1000:
-        #     continue
+        # print(f"Tag {i}: '{tag}' with bbox_norm=({x0_norm},{y0_norm},{w0_norm},{h0_norm}) and area = {w0_norm * h0_norm}")
+        if w0_norm * h0_norm > 3000 or w0_norm > 40 or h0_norm > 40:
+            continue
 
         bbox_orig = [x0_orig, y0_orig, w0_orig, h0_orig]
         bbox_norm = [x0_norm, y0_norm, w0_norm, h0_norm]
 
         results.append({"tag_id": tag, "center_x": cx_orig, "center_y": cy_orig, "bbox_orig": bbox_orig, "bbox_norm": bbox_norm})
+        # print("Added")
 
     print(f"Number of boxes after OCR: {len(results)}")
+    # Convert results to Candidate list
+    results_candidates: List[Candidate] = []
+    for r in results:
+        c = Candidate(
+            bbox=r["bbox_orig"],
+            shape="---",
+            color="---",
+            use="---",
+        )
+        results_candidates.append(c)
+    if debug:
+        draw_bboxes_on_image(
+            img_bgr=img,
+            candidates=results_candidates,
+            title="After OCR"
+        )
 
     results = dedup_results(results, dist_thresh=10)
     results = sorted(results, key=lambda x: x["tag_id"])

@@ -5,6 +5,29 @@ import cv2
 import numpy as np
 
 
+def core_bbox_from_contour(cnt: np.ndarray, keep_ratio: float = 0.7) -> tuple[int,int,int,int]:
+    """
+    Compute bbox from 'core' contour points by dropping farthest points (tail outliers).
+    keep_ratio=0.7 keeps the closest 70% points to centroid.
+    """
+    pts = cnt.reshape(-1, 2).astype(np.float32)
+
+    m = cv2.moments(cnt)
+    if abs(m.get("m00", 0.0)) < 1e-6:
+        x,y,w,h = cv2.boundingRect(cnt)
+        return x,y,w,h
+    cx = m["m10"] / m["m00"]
+    cy = m["m01"] / m["m00"]
+    center = np.array([cx, cy], dtype=np.float32)
+
+    d = np.linalg.norm(pts - center, axis=1)
+    thresh = np.quantile(d, keep_ratio)       # keep closest keep_ratio points
+    core_pts = pts[d <= thresh].astype(np.int32)
+
+    x, y, w, h = cv2.boundingRect(core_pts)
+    return int(x), int(y), int(w), int(h)
+
+
 def detect_circles_from_mask(
     mask: np.ndarray,
     *,
@@ -18,26 +41,27 @@ def detect_circles_from_mask(
     out: List[Candidate] = []
 
     for cnt in find_contours(mask):
+        print(f"Contour with {len(cnt)} points.")
         area = _filter_by_area(cnt, min_area, max_area)
-        # print(area)
+        print(f"Area: {area}")
         if area is None:
             continue
 
         peri = float(cv2.arcLength(cnt, True))
-        # print(peri)
         if peri <= 1e-6:
             continue
 
         circ = (4.0 * np.pi * area) / (peri * peri)
-        # print(circ)
+        print(f"Circularity: {circ}")
         if not (circularity_min <= circ <= circularity_max):
             continue
 
         cxy = contour_centroid(cnt)
+        print(f"Centroid: {cxy}")
         if cxy is None:
             continue
 
-        x, y, w, h = cv2.boundingRect(cnt)
+        x, y, w, h = core_bbox_from_contour(cnt, keep_ratio=0.7)
 
         out.append(Candidate(
             bbox=(x, y, w, h),
@@ -83,7 +107,7 @@ def detect_rects_from_mask(
         if cxy is None:
             continue
 
-        x, y, w, h = cv2.boundingRect(poly)
+        x, y, w, h = core_bbox_from_contour(poly, keep_ratio=0.7)
 
         out.append(Candidate(
             bbox=(x, y, w, h),
@@ -127,7 +151,7 @@ def detect_polygons_from_mask(
         if cxy is None:
             continue
 
-        x, y, w, h = cv2.boundingRect(poly)
+        x, y, w, h = core_bbox_from_contour(poly, keep_ratio=0.7)
 
         out.append(Candidate(
             bbox=(x, y, w, h),
