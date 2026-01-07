@@ -32,9 +32,9 @@ def detect_circles_from_mask(
     mask: np.ndarray,
     *,
     meta: Optional[Dict[str, Any]] = None,
-    min_area: int = 25,
+    min_area: int = 1,
     max_area: int = 2000,
-    circularity_min: float = 0.4,
+    circularity_min: float = 0.01,
     circularity_max: float = 2,
 ) -> List[Candidate]:
     meta = meta or {}

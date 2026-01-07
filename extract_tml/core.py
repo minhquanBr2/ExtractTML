@@ -40,8 +40,8 @@ def dedup_results(items: List[Dict[str, Any]], dist_thresh: int) -> List[Dict[st
 
 def extract_tags(
         image_bgr: np.ndarray,
-        debug: bool = False,
-        return_detections: bool = False
+        specs_allowed: List[int] = list(range(1,13)),
+        debug: bool = False
     ) -> Dict[str, Any]:
     ocr_fn = build_ocr()
 
@@ -76,7 +76,7 @@ def extract_tags(
         else:
             mask_bank[color] = {
                 "raw": raw0,
-                "stroke": raw0,
+                "stroke": stroke,
                 "fill": fill,
             }
 
@@ -95,6 +95,8 @@ def extract_tags(
     # ---- detect by rules (rule stamps meta)
     candidates: List[Candidate] = []
     for rule_id, spec in RULE_SPEC.items():
+        if rule_id not in specs_allowed:
+            continue
         print(f"Checking rule {rule_id} with spec: {spec}")
         color = spec["color"]
         shape = spec["shape"]
@@ -112,12 +114,13 @@ def extract_tags(
                 candidates=rule_candidates,
                 title=f"Candidates for rule {rule_id} ({color}, {shape}, {use})"
             )
+        print()
 
     print(f"\nFounding {len(candidates)} candidates in total.")
 
     # ---- keep only candidates that already have rule_id
     valid = [c for c in candidates if c.rule_id is not None]
-    print(f"\nFounding {len(valid)} valid candidates in total.")
+    # print(f"\nFounding {len(valid)} valid candidates in total.")
 
     # --- VISUALIZE BEFORE NMS
     if debug:
@@ -133,8 +136,7 @@ def extract_tags(
         grouped[c.rule_id].append(c)
     
     for rule_id in sorted(grouped.keys()):
-        print(f"rule_id = {rule_id}:")
-        print(f"Number of candidates for rule {rule_id}: {len(grouped[rule_id])}")
+        print(f"rule_id = {rule_id}:\t{len(grouped[rule_id])} candidates")
         print()
 
     valid_after_nms = []
@@ -153,7 +155,7 @@ def extract_tags(
     results: List[Dict[str, Any]] = []
 
     for i, c in enumerate(valid_after_nms):
-        roi = crop_with_padding(img, c.bbox, pad_ratio=0.25)
+        roi = crop_with_padding(img, c.bbox, pad_ratio=0.05)
 
         raw_text, conf = ocr_fn(roi)
         tag = extract_tag_from_text(raw_text)
@@ -182,7 +184,7 @@ def extract_tags(
         w0_norm = int(np.clip(round(w0_orig / W0 * 1000.0), 0, 1000))
         h0_norm = int(np.clip(round(h0_orig / H0 * 1000.0), 0, 1000))
 
-        print(f"Tag {i}: '{tag}' with bbox_norm=({x0_norm},{y0_norm},{w0_norm},{h0_norm}) and area = {w0_norm * h0_norm}")
+        # print(f"Tag {i}: '{tag}' with bbox_norm=({x0_norm},{y0_norm},{w0_norm},{h0_norm}) and area = {w0_norm * h0_norm}")
         if w0_norm * h0_norm > 3000 or w0_norm > 100 or h0_norm > 100:
             continue
 
@@ -203,28 +205,17 @@ def extract_tags(
             use="---",
         )
         results_candidates.append(c)
-    if debug:
-        draw_bboxes_on_image(
-            img_bgr=img,
-            candidates=results_candidates,
-            title="After OCR"
-        )
+    # if debug:
+    #     draw_bboxes_on_image(
+    #         img_bgr=img,
+    #         candidates=results_candidates,
+    #         title="After OCR"
+    #     )
 
     results = dedup_results(results, dist_thresh=10)
     results = sorted(results, key=lambda x: x["tag_id"])
 
-    detections = []
-    for r in results:
-        detections.append({
-            "tag_id": r["tag_id"],
-            "center_x": r["center_x"],
-            "center_y": r["center_y"],
-            "bbox_orig": r["bbox_orig"]
-        })
-
     print(f"Number of boxes after deduplication: {len(results)}")
 
     out_json = {"extracted_tml_tags": results}
-    if return_detections:
-        return out_json, detections
     return out_json
