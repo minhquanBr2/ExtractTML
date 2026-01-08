@@ -1,10 +1,9 @@
-from typing import Any, Dict, List, Optional, Tuple
-import json
+from typing import Any, Dict, List, Optional
 import numpy as np
 import cv2
 from collections import defaultdict
 
-from .ocr import build_ocr
+from .ocr import build_ocr, preprocess_roi_for_ocr, ocr_best
 from .config import HSV_RANGES, RULE_SPEC, SHAPE_THRESH
 from .preprocess import denoise_light, maybe_resize, threshold_hsv, morph_close_open, remove_small_blobs, split_stroke_fill_from_raw
 from .detect import detect_by_shape
@@ -155,9 +154,9 @@ def extract_tags(
     results: List[Dict[str, Any]] = []
 
     for i, c in enumerate(valid_after_nms):
-        roi = crop_with_padding(img, c.bbox, pad_ratio=0.05)
-
-        raw_text, conf = ocr_fn(roi)
+        roi = crop_with_padding(img, c.bbox, pad_ratio=0.25)
+        raw_text, conf = ocr_best(ocr_fn, roi)
+        
         tag = extract_tag_from_text(raw_text)
         if not tag:
             tag = "???"
@@ -195,6 +194,7 @@ def extract_tags(
         # print("Added")
 
     print(f"Number of boxes after OCR: {len(results)}")
+
     # Convert results to Candidate list
     results_candidates: List[Candidate] = []
     for r in results:
@@ -205,12 +205,6 @@ def extract_tags(
             use="---",
         )
         results_candidates.append(c)
-    # if debug:
-    #     draw_bboxes_on_image(
-    #         img_bgr=img,
-    #         candidates=results_candidates,
-    #         title="After OCR"
-    #     )
 
     results = dedup_results(results, dist_thresh=10)
     results = sorted(results, key=lambda x: x["tag_id"])

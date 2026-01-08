@@ -45,8 +45,7 @@ def main(argv=None):
     out_json, detections = extract_tags(
         img,
         specs_allowed=specs_allowed,
-        debug=args.debug,
-        return_detections=True,
+        debug=args.debug
     )
 
 

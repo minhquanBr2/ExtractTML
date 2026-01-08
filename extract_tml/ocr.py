@@ -4,6 +4,49 @@ import cv2
 from .config import OCR_WHITELIST
 
 
+def preprocess_roi_for_ocr(roi_bgr: np.ndarray) -> np.ndarray:
+    g = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
+
+    # upscale so tiny digits become readable (very important)
+    g = cv2.resize(g, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+
+    # denoise while keeping edges
+    g = cv2.bilateralFilter(g, 7, 50, 50)
+
+    # boost contrast a bit
+    g = cv2.normalize(g, None, 0, 255, cv2.NORM_MINMAX)
+
+    # adaptive threshold handles uneven background
+    bw = cv2.adaptiveThreshold(
+        g, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        31, 8
+    )
+
+    # remove small specks
+    k = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    bw = cv2.morphologyEx(bw, cv2.MORPH_OPEN, k, iterations=1)
+
+    return bw
+
+
+def ocr_best(ocr_fn, roi_bgr):
+    roi_a = preprocess_roi_for_ocr(roi_bgr)
+    t1, c1 = ocr_fn(roi_a)
+
+    roi_b = 255 - roi_a
+    t2, c2 = ocr_fn(roi_b)
+
+    # also try raw grayscale upscaled (sometimes best)
+    g = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
+    g = cv2.resize(g, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+    t3, c3 = ocr_fn(g)
+
+    best = max([(t1,c1),(t2,c2),(t3,c3)], key=lambda x: x[1])
+    return best
+
+
 def build_ocr() -> Callable[[np.ndarray], Tuple[str, float]]:
     """Returns a function ocr(img_bin_or_gray)->(text, confidence)."""
 
